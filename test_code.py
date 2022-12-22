@@ -20,7 +20,7 @@ print(metrics)
 register_model(model_uri, model_name)
 
 # Load the production model and evaluate
-prod_model_uri = "models:/LR/1"
+prod_model_uri = "models:/LR/2"
 metrics_prod, y_pred_prod = evaluate_model(x_test, y_test, prod_model_uri)
 print(metrics_prod)
 
