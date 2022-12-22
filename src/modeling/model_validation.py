@@ -9,6 +9,9 @@ from sklearn.model_selection import cross_val_score
 
 
 def get_val_performance(y_true: np.array, y_pred: np.array):
+    """
+    Get performance metrics for the validation set
+    """
     val_accuracy = accuracy_score(y_true, y_pred)
     val_f1 = f1_score(y_true, y_pred, average='macro')
 
@@ -16,6 +19,9 @@ def get_val_performance(y_true: np.array, y_pred: np.array):
 
 
 def get_cv_performance(x_train: pd.DataFrame, y_train: np.array, model):
+    """
+    Get performance metrics for the train set using cross validation
+    """
     # For CV model should be sklearn and not a loaded trained mlflow model
     if "sklearn" not in str(type(model)):
         raise TypeError("Model should be and sklearn model.")
@@ -25,7 +31,10 @@ def get_cv_performance(x_train: pd.DataFrame, y_train: np.array, model):
     return cv_accuracy, cv_f1
 
 
-def get_model(model_uri):
+def get_model_from_uri(model_uri):
+    """
+    Load a model that is either logged or registered on MLflow
+    """
     model = None
     try:
         model = mlflow.pyfunc.load_model(model_uri)
@@ -36,13 +45,19 @@ def get_model(model_uri):
 
 
 def get_predictions(x_test: pd.DataFrame, model):
+    """
+    Use a model to predict on given data
+    """
     y_pred = model.predict(x_test)
 
     return y_pred
 
 
 def evaluate_model(x_test: pd.DataFrame, y_test: np.array, model_uri):
-    model = get_model(model_uri)
+    """
+    Pipeline to use the evaluation functions
+    """
+    model = get_model_from_uri(model_uri)
     y_pred = get_predictions(x_test, model)
 
     val_accuracy, val_f1 = get_val_performance(y_test, y_pred)

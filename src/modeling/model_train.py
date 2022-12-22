@@ -9,6 +9,9 @@ from src.modeling.model_validation import get_cv_performance, get_val_performanc
 
 
 def get_model(model_name='LR'):
+    """
+    Define a model and return it
+    """
     accepted_models = ['LR', 'XGB']
     if model_name not in accepted_models:
         raise ValueError(f"'model name' should be in: {accepted_models}.")
@@ -72,6 +75,9 @@ def train_model(x_train: pd.DataFrame, y_train: np.array, model_name,
 
 
 def register_model(model_uri, model_name):
+    """
+    Register a model to the MLflow Model Registry
+    """
     mlflow.register_model(model_uri, model_name)
 
     return f"Model {model_name} registered."
