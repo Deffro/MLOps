@@ -4,8 +4,9 @@ import mlflow
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
+from xgboost import XGBClassifier
 
-from src.modeling.model_validation import get_cv_performance, get_val_performance, get_predictions
+from src.modeling.model_validation import get_cv_performance, get_val_performance, get_predictions, evaluate_model
 
 
 def get_model(model_name='LR'):
@@ -18,9 +19,14 @@ def get_model(model_name='LR'):
 
     model = None
     if model_name == 'LR':
-        C = 0.8
+        C = 0.7
         iterations = 200
         model = LogisticRegression(C=C, max_iter=iterations)
+    if model_name == 'XGB':
+        learning_rate = 0.05
+        max_depth = 5
+        n_estimators = 200
+        model = XGBClassifier(learning_rate=learning_rate, max_depth=max_depth, n_estimators=n_estimators)
 
     return model
 
@@ -74,12 +80,5 @@ def train_model(x_train: pd.DataFrame, y_train: np.array, model_name,
     return run_id, model_uri
 
 
-def register_model(model_uri, model_name):
-    """
-    Register a model to the MLflow Model Registry
-    """
-    mlflow.register_model(model_uri, model_name)
-
-    return f"Model {model_name} registered."
 
 
