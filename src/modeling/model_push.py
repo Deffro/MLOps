@@ -2,6 +2,7 @@ import mlflow
 from mlflow.tracking.client import MlflowClient
 
 from src.modeling.model_validation import evaluate_model
+from loguru import logger
 
 
 def register_model(model_uri, model_name):
@@ -9,7 +10,7 @@ def register_model(model_uri, model_name):
     Register a model to the MLflow Model Registry
     """
     mv = mlflow.register_model(model_uri, model_name)
-    print(f"Model {model_name} registered.")
+    logger.info(f"Model {model_name} registered.")
 
     return mv
 
@@ -31,15 +32,15 @@ def register_model_by_comparison(registered_model_uri, new_model_to_compare_uri,
     metrics_model_to_compare_uri, _ = evaluate_model(x_test, y_test, new_model_to_compare_uri)
 
     if metrics_model_to_compare_uri['val_f1'] >= metrics_registered_model['val_f1']:
-        print(f"Model {new_model_to_compare_uri} superior to {registered_model_uri}. "
-              f"({metrics_model_to_compare_uri['val_f1']} vs {metrics_registered_model['val_f1']})")
-        print("Registering new model.")
+        logger.info(f"Model {new_model_to_compare_uri} superior to {registered_model_uri}. "
+                    f"({metrics_model_to_compare_uri['val_f1']} vs {metrics_registered_model['val_f1']})")
+        logger.info("Registering new model.")
         rm = register_model(registered_model_uri, model_name)
         if push_to_production is True:
             promote_model_to_production(f"{rm.name}/{rm.version}")
     else:
-        print(f"Model {new_model_to_compare_uri} inferior to {registered_model_uri}. "
-              f"({metrics_model_to_compare_uri['val_f1']} vs {metrics_registered_model['val_f1']})")
+        logger.info(f"Model {new_model_to_compare_uri} inferior to {registered_model_uri}. "
+                    f"({metrics_model_to_compare_uri['val_f1']} vs {metrics_registered_model['val_f1']})")
 
 
 def promote_model_to_production(reg_model):

@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from xgboost import XGBClassifier
+from loguru import logger
 
 from src.modeling.model_validation import get_cv_performance, get_val_performance, get_predictions, evaluate_model
 
@@ -52,7 +53,7 @@ def train_model(x_train: pd.DataFrame, y_train: np.array, model_name,
     with mlflow.start_run() as run:
         # MLflow: print run specific info
         run_id = run.info.run_id
-        print(f"\nActive run_id: {run_id}")
+        logger.info(f"\nActive run_id: {run_id}")
 
         # Train
         clf.fit(x_train, y_train)

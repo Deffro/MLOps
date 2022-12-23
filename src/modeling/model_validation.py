@@ -6,6 +6,7 @@ from sklearn.metrics import (
     f1_score,
 )
 from sklearn.model_selection import cross_val_score
+from loguru import logger
 
 
 def get_val_performance(y_true: np.array, y_pred: np.array):
@@ -39,7 +40,7 @@ def get_model_from_uri(model_uri):
     try:
         model = mlflow.pyfunc.load_model(model_uri)
     except:
-        print(f"There is no model {model_uri}.")
+        logger.error(f"There is no model {model_uri}.")
 
     return model
 
