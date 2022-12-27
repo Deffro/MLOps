@@ -1,38 +1,10 @@
 version: '3.7'
 
 services:
-  # This container runs the artifact storage as a minio server, which is a lightweight S3.
-    minio:
-        restart: always
-        image: minio/minio
-        ports:
-            - "9000:9000"
-            - "9001:9001"
-        command: server /data --console-address ':9001' --address ':9000'
-        environment:
-            - MINIO_ROOT_USER=${MINIO_ACCESS_KEY_ID}
-            - MINIO_ROOT_PASSWORD=${MINIO_SECRET_ACCESS_KEY}
-        volumes:
-            - mlflow-data:/data
 
-
-  # This container creates the "data" in the minio server, in which mlflow will later store the artifacts.
-    mlflow-init:
-        image: minio/mc
-        depends_on:
-          - minio
-        env_file:
-            - .env
-        entrypoint: >
-          /bin/sh -c "
-          /usr/bin/mc config host add myminio http://minio:9000 ${MINIO_ACCESS_KEY_ID} ${MINIO_SECRET_ACCESS_KEY};
-          /usr/bin/mc mb myminio/data;
-          /usr/bin/mc policy download myminio/data;
-          exit 0;
-          "
-
-
-  # This container runs the postgresql database for mlflow.
+#  ########################################################################################################
+#  # This container runs the postgresql database for mlflow.
+#  ########################################################################################################
     postgres-mlflow:
         image: postgres:13
         environment:
@@ -43,28 +15,60 @@ services:
           # The data folder is a named volume mounted to /var/lib/postgresql/data
           - postgres-db-volume-mlflow:/var/lib/postgresql/data
 
+
+  ########################################################################################################
   # This container runs the webserver for mlflow.
+  ########################################################################################################
     mlflow-webserver:
         build: ./dockerfiles/mlflow
         image: mlflow_server
         ports:
           - "5000:5000"
         environment:
-          # The following credentials allow connection to the minio server.
-          MLFLOW_S3_ENDPOINT_URL: http://minio:9000
-          MLFLOW_S3_IGNORE_TLS: "true"
-          MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID}
-          MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY}
+          # The following credentials allow connection to the S3 server.
+           AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+           AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+           AWS_DEFAULT_REGION: ${AWS_REGION}
+           MLFLOW_S3_ENDPOINT_URL: http://s3:9000
 
         # The following command will launch the mlflow webserver on port 5000, with postgresql as the database
         # and S3 as the artifact storage.
         # The option "--serve-artifacts" will enable the serving of artifacts through mlflow as a proxy to the S3 server.
-        command: mlflow server --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-mlflow/${POSTGRES_DB} --artifacts-destination s3://data -h 0.0.0.0 -p 5000 --serve-artifacts
+        command: mlflow server --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-mlflow/${POSTGRES_DB} --default-artifact-root s3://${AWS_BUCKET_NAME}/ -h 0.0.0.0 -p 5000 --serve-artifacts
         depends_on:
           - postgres-mlflow
-          - minio
-          - mlflow-init
 
+
+  ########################################################################################################
+  # This container runs the jupyter lab.
+  ########################################################################################################
+    jupyter:
+        image: jupyter_lab
+        # docker-compose build beeore you can use the image in docker-compose up again.
+        build: ./dockerfiles/jupyter
+        ports:
+          - ${JUPYTER_PORT}:${JUPYTER_PORT}
+        environment:
+          JUPYTER_ENABLE_LAB: "yes"
+          JUPYTER_TOKEN: ${JUPYTER_TOKEN}
+          PYTHONPATH: "$$PYTHONPATH:/opt/airflow/plugins"
+          # Sets the tracking uri env variable for mlflow in jupyter lab
+          # AWS credentials needed to access it via mlflow
+          MLFLOW_TRACKING_URI: "http://mlflow-webserver:5000"
+          GIT_PYTHON_REFRESH: "quiet"
+          AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+          AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+        volumes:
+          # Mounts the notebooks folder
+          - ./notebooks:/notebooks
+          # Mounts the src folder.
+          - ./src:/src
+          # Mounts the data folder to /data
+          - ./data:/data
+          # Mounts the root folder
+          - ./:/mlops
+
+        entrypoint: sh -c 'jupyter lab --ip=0.0.0.0 --port=${JUPYTER_PORT} --no-browser --notebook-dir=/mlops --allow-root'
 
 volumes:
     mlflow-data:
