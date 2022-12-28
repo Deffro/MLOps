@@ -9,8 +9,8 @@ SRC_ROOT = Path(src.__file__).resolve().parent
 ROOT = SRC_ROOT.parent
 DATASET_DIR = ROOT / "data"
 
-DATA1 = DATASET_DIR / "telco_customer_churn_1.csv"
-DATA2 = DATASET_DIR / "telco_customer_churn_2.csv"
+DATA1 = DATASET_DIR / "input_data/telco_customer_churn_1.csv"
+DATA2 = DATASET_DIR / "input_data/telco_customer_churn_2.csv"
 
 RANDOM_STATE = 0
 TEST_SIZE = 0.2
