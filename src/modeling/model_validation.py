@@ -6,6 +6,7 @@ from sklearn.metrics import (
     f1_score,
 )
 from sklearn.model_selection import cross_val_score
+from src.processing.data_transformation import check_keys
 from loguru import logger
 
 
@@ -54,10 +55,37 @@ def get_predictions(x_test: pd.DataFrame, model):
     return y_pred
 
 
-def evaluate_model(x_test: pd.DataFrame, y_test: np.array, model_uri):
+def evaluate_model(data_files, model_uri_=None, task_instance=None):
     """
     Pipeline to use the evaluation functions
+    data_files (dict): A dictionary of data file paths.
+    The keys that this function will use are:
+        'transformed_x_test_file': the transformed x_test
+        'transformed_y_test_file': the transformed y_test
+    model_uri_: Pass a mlflow uri if running without using airflow
+    When using airflow, this uri is passed through task_instance.xcom_pull(task_ids='train_model')
     """
+    required_keys = [
+        'transformed_x_test_file',
+        'transformed_y_test_file'
+    ]
+    check_keys(data_files, required_keys)
+
+    x_test = pd.read_csv(data_files['transformed_x_test_file'])
+    y_test = pd.read_csv(data_files['transformed_y_test_file'])
+
+    if model_uri_ is None:
+        # task_instance = kwargs.get('task_instance')
+
+        if task_instance is None:
+            ValueError("task_instance is required, ensure you are calling this function "
+                       "from an airflow task and after a training run.")
+
+        # Get the returns of the 'train_model' function, the task_id of which was named 'train_model' in airflow
+        _, model_uri = task_instance.xcom_pull(task_ids='train_model')
+    else:
+        model_uri = model_uri_
+
     model = get_model_from_uri(model_uri)
     y_pred = get_predictions(x_test, model)
 

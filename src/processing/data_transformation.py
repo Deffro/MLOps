@@ -11,22 +11,45 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 
-from src.config.core import DATA1, RANDOM_STATE, TEST_SIZE, VARS_TO_DROP, TARGET, CAT_VARS_ONEHOT, CAT_VARS_ORDINAL_ARBITARY, NUM_VARS_YEO_YOHNSON, VAR_REPLACE_EMPTY_DATA
+from src.config.core import RANDOM_STATE, TEST_SIZE, VARS_TO_DROP, TARGET, CAT_VARS_ONEHOT, CAT_VARS_ORDINAL_ARBITARY, \
+    NUM_VARS_YEO_YOHNSON, VAR_REPLACE_EMPTY_DATA
+from loguru import logger
 
 
-def read_data(path=DATA1) -> pd.DataFrame:
+def check_keys(dict_, required_keys):
     """
-    Read a csv from the provided path
+    Check if a dictionary contains all expected keys
     """
-    data = pd.read_csv(path)
-    return data
+    for key in required_keys:
+        if key not in dict_:
+            raise ValueError(f'input argument "data_files" is missing required key "{key}"')
 
 
-def split_train_test(data: pd.DataFrame):
+def get_read_data(filepath) -> pd.DataFrame:
+    return pd.read_csv(filepath)
+
+
+def read_data(data_files):
     """
-    Split data into train and test set. Test size is declared
-    as a constant in the config
+    Read and save a csv from the provided path
+    :data_files (dict): A dictionary of data file paths.
+    The keys that this function will use are:
+        'input_raw_data_file': the initial raw file to use for the pipeline
+        'raw_data_file': the (same) raw file, but saved in a different dir to use for the rest of the pipeline
     """
+    required_keys = [
+        'input_raw_data_file',
+        'raw_data_file'
+    ]
+    check_keys(data_files, required_keys)
+
+    data = get_read_data(data_files['input_raw_data_file'])
+    data.to_csv(data_files['raw_data_file'], index=False)
+    logger.success(f"File {data_files['raw_data_file']} was saved successfully.")
+
+
+def get_split_train_test(data):
+
     x_train, x_test, y_train, y_test = train_test_split(
         data.drop(VARS_TO_DROP+[TARGET], axis=1),
         data[TARGET],
@@ -34,6 +57,37 @@ def split_train_test(data: pd.DataFrame):
         random_state=RANDOM_STATE,
     )
     return x_train, x_test, y_train, y_test
+
+
+def split_train_test(data_files):
+    """
+    Save and return the train and test data of the initial raw data
+    :data_files (dict): A dictionary of data file paths.
+    The keys that this function will use are:
+        'raw_data_file': the initial raw file with both train and test data
+        'raw_x_train_file': the train subset without the target of the 'raw_data_file'
+        'raw_x_test_file': the test subset without the target of the 'raw_data_file'
+        'raw_y_train_file': the target to train of the 'raw_data_file'
+        'raw_y_test_file': the target to test of the 'raw_data_file'
+    """
+    required_keys = [
+        'raw_data_file',
+        'raw_x_train_file',
+        'raw_x_test_file',
+        'raw_y_train_file',
+        'raw_y_test_file'
+    ]
+    check_keys(data_files, required_keys)
+
+    data = pd.read_csv(data_files['raw_data_file'])
+    x_train, x_test, y_train, y_test = get_split_train_test(data)
+
+    x_train.to_csv(data_files['raw_x_train_file'], index=False)
+    x_test.to_csv(data_files['raw_x_test_file'], index=False)
+    y_train.to_csv(data_files['raw_y_train_file'], index=False)
+    y_test.to_csv(data_files['raw_y_test_file'], index=False)
+
+    logger.success("Initial dataset was split and saved successfully.")
 
 
 def replace_empty_in_col(data: pd.DataFrame) -> pd.DataFrame:
@@ -143,35 +197,71 @@ def oversample_data(x_train: pd.DataFrame, y_train: pd.Series):
     return x_train, y_train
 
 
-def preprocess_data(x_train: pd.DataFrame, y_train: pd.Series,
-                    x_test=None, y_test=None):
-    """
-    Pipeline of all preprocessing functions
-    """
+def get_preprocess_data(x_train, x_test, y_train, y_test):
+
     x_train = replace_empty_in_col(x_train)
-    if x_test is not None:
-        x_test = replace_empty_in_col(x_test)
+    x_test = replace_empty_in_col(x_test)
 
     cat_encoders = fit_categorical_encoders(x_train, y_train)
     x_train = transform_categorical_encoders(x_train, cat_encoders)
-    if x_test is not None:
-        x_test = transform_categorical_encoders(x_test, cat_encoders)
+    x_test = transform_categorical_encoders(x_test, cat_encoders)
 
     num_transformers = fit_numerical_transformers(x_train)
     x_train = transform_numerical_transformers(x_train, num_transformers)
-    if x_test is not None:
-        x_test = transform_numerical_transformers(x_test, num_transformers)
+    x_test = transform_numerical_transformers(x_test, num_transformers)
 
     target_encoder = fit_target_encoder(y_train)
     y_train = transform_target_encoder(target_encoder, y_train)
-    if y_test is not None:
-        y_test = transform_target_encoder(target_encoder, y_test)
+    y_test = transform_target_encoder(target_encoder, y_test)
 
     scaler = fit_data_scaler(x_train)
     x_train = transform_data_scaler(scaler, x_train)
-    if x_test is not None:
-        x_test = transform_data_scaler(scaler, x_test)
+    x_test = transform_data_scaler(scaler, x_test)
 
     x_train, y_train = oversample_data(x_train, y_train)
 
-    return x_train, y_train, x_test, y_test
+    return x_train, x_test, y_train, y_test
+
+
+def preprocess_data(data_files):
+    """
+    Pipeline of all preprocessing functions.
+    Will save and return the preprocessed train and test data of the initial raw data
+
+        data_files (dict): A dictionary of data file paths.
+    The keys that this function will use are:
+        'raw_x_train_file': the train subset without the target of the 'raw_data_file'
+        'raw_x_test_file': the test subset without the target of the 'raw_data_file'
+        'raw_y_train_file': the target to train of the 'raw_data_file'
+        'raw_y_test_file': the target to test of the 'raw_data_file'
+
+        'transformed_x_train_file': the transformed x_train
+        'transformed_x_test_file': the transformed x_test
+        'transformed_y_train_file': the transformed y_train
+        'transformed_y_test_file': the transformed y_test
+    """
+    required_keys = [
+        'raw_x_train_file',
+        'raw_x_test_file',
+        'raw_y_train_file',
+        'raw_y_test_file',
+        'transformed_x_train_file',
+        'transformed_x_test_file',
+        'transformed_y_train_file',
+        'transformed_y_test_file'
+    ]
+    check_keys(data_files, required_keys)
+
+    x_train = pd.read_csv(data_files['raw_x_train_file'])
+    x_test = pd.read_csv(data_files['raw_x_test_file'])
+    y_train = pd.read_csv(data_files['raw_y_train_file'])
+    y_test = pd.read_csv(data_files['raw_y_test_file'])
+
+    x_train, x_test, y_train, y_test = get_preprocess_data(x_train, x_test, y_train, y_test)
+
+    x_train.to_csv(data_files['transformed_x_train_file'], index=False)
+    x_test.to_csv(data_files['transformed_x_test_file'], index=False)
+    pd.DataFrame(y_train).to_csv(data_files['transformed_y_train_file'], index=False)
+    pd.DataFrame(y_test).to_csv(data_files['transformed_y_test_file'], index=False)
+
+    logger.success("Data were transformed and saved successfully.")

@@ -1,3 +1,6 @@
+import sys
+sys.path.append("/opt/airflow/")
+import os
 from datetime import timedelta
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator, BranchPythonOperator
@@ -7,29 +10,31 @@ from airflow.utils.timezone import datetime
 
 from src.processing.data_transformation import read_data, split_train_test, preprocess_data
 from src.modeling.model_train import train_model
-from src.modeling.model_push import register_model, register_model_by_comparison, promote_model_to_production
+from src.modeling.model_push import register_model, register_model_by_comparison, check_if_registered_model_exists
 from src.modeling.model_validation import evaluate_model
+from src.config.core import DATA1
 
 
-# SET A UNIQUE MODEL NAME (e.g. "model_<YOUR NAME>"):
-_model_name = "my_model"
-# SET A UNIQUE EXPERIMENT NAME (e.g. "experiment_<YOUR NAME>"):
-_mlflow_experiment_name = "my_experiment"
-
-_raw_data_dir = '/data/batch1'
-# _raw_data_dir = '/data/batch2'
-
+model_name = 'LR'
+experiment_name = "churn_prediction"
+reg_model = "LR/2"
 
 _root_dir = "/"
-_data_dir = "/data"
+_data_dir = "./data"
+_output_data_dir = _data_dir + '/output_data'
+if not os.path.exists(_output_data_dir):
+    os.makedirs(_output_data_dir, mode=0o777)
 _data_files = {
-    'raw_data_file': os.path.join(_data_dir, 'data.csv'),
-    'raw_train_file': os.path.join(_data_dir, 'data_train.csv'),
-    'raw_test_file': os.path.join(_data_dir, 'data_test.csv'),
-    'transformed_x_train_file': os.path.join(_data_dir, 'x_train.csv'),
-    'transformed_y_train_file': os.path.join(_data_dir, 'y_train.csv'),
-    'transformed_x_test_file': os.path.join(_data_dir, 'x_test.csv'),
-    'transformed_y_test_file': os.path.join(_data_dir, 'y_test.csv'),
+    'input_raw_data_file': os.path.join(DATA1),
+    'raw_data_file': os.path.join(_output_data_dir + '/data.csv'),
+    'raw_x_train_file': os.path.join(_output_data_dir + '/x_train_raw.csv'),
+    'raw_x_test_file': os.path.join(_output_data_dir + '/x_test_raw.csv'),
+    'raw_y_train_file': os.path.join(_output_data_dir + '/y_train_raw.csv'),
+    'raw_y_test_file': os.path.join(_output_data_dir + '/y_test_raw.csv'),
+    'transformed_x_train_file': os.path.join(_output_data_dir + '/x_train.csv'),
+    'transformed_y_train_file': os.path.join(_output_data_dir + '/y_train.csv'),
+    'transformed_x_test_file': os.path.join(_output_data_dir + '/x_test.csv'),
+    'transformed_y_test_file': os.path.join(_output_data_dir + '/y_test.csv'),
 }
 
 if not _root_dir:
@@ -51,66 +56,68 @@ dag = DAG(
 )
 
 with dag:
-    pass
-    read_data = PythonOperator(
+    operator_read_data = PythonOperator(
         task_id='read_data',
         python_callable=read_data,
-        op_kwargs={}
-    )
-
-    split_train_test = PythonOperator(
-        task_id='split_train_test',
-        python_callable=split_train_test,
-        op_kwargs={'data': _data_files,
-                   'n_days_test': 20}
-    )
-
-    data_validation = PythonOperator(
-        task_id='data_validation',
-        python_callable=validate_data,
-        op_kwargs={'data_files': _data_files,
-                   'configs_dir': _data_dir}
-    )
-
-    data_transformation = PythonOperator(
-        task_id='data_transformation',
-        python_callable=transform_data,
         op_kwargs={'data_files': _data_files}
     )
 
-    model_training = PythonOperator(
-        task_id='model_training',
+    operator_split_train_test = PythonOperator(
+        task_id='split_train_test',
+        python_callable=split_train_test,
+        op_kwargs={'data_files': _data_files}
+    )
+
+    operator_preprocess_data = PythonOperator(
+        task_id='preprocess_data',
+        python_callable=preprocess_data,
+        op_kwargs={'data_files': _data_files}
+    )
+
+    operator_model_training = PythonOperator(
+        task_id='train_model',
         python_callable=train_model,
         op_kwargs={
             'data_files': _data_files,
-            'experiment_name': _mlflow_experiment_name
+            'experiment_name': experiment_name,
+            'model_name': model_name,
+            'track_cv_performance': True
         }
     )
 
-    model_validation = BranchPythonOperator(
-        task_id='model_validation',
-        python_callable=validate_model,
+    operator_register_model = PythonOperator(
+        task_id='register_model',
+        python_callable=register_model,
         op_kwargs={
-            'data_files': _data_files,
-            'model': _model_name
-        },
+            'model_name': model_name
+        }
     )
 
-    stop = DummyOperator(
-        task_id='keep_old_model',
+    operator_check_if_registered_model_exists = BranchPythonOperator(
+        task_id='check_if_registered_model_exists',
+        python_callable=check_if_registered_model_exists,
+        op_kwargs={
+            'reg_model': reg_model
+        }
+    )
+
+    operator_stop = DummyOperator(
+        task_id='stop',
         dag=dag,
         trigger_rule="all_done",
     )
 
-    push_to_production = PythonOperator(
-        task_id='push_new_model',
-        python_callable=push_model,
+    operator_register_model_by_comparison = PythonOperator(
+        task_id='register_model_by_comparison',
+        python_callable=register_model_by_comparison,
         op_kwargs={
-            'model': _model_name
+            'data_files': _data_files,
+            'registered_model_uri': reg_model,
+            'model_name': model_name,
+            'push_to_production': True,
         },
     )
 
-    data_ingestion >> data_split >> data_validation >> data_transformation >> model_training >> model_validation >> [
-        push_to_production, stop]
-    data_split >> data_validation >> data_transformation >> model_validation >> [
-        push_to_production, stop]
+    operator_read_data >> operator_split_train_test >> operator_preprocess_data >> \
+        operator_model_training >> operator_check_if_registered_model_exists >> \
+        [operator_stop, operator_register_model, operator_register_model_by_comparison]
