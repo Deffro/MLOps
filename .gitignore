@@ -3,10 +3,11 @@
 
 
 # Folders
+data/output_data
 
-
-# Jupyter notebook
-
+# Airflow
+airflow/logs
+airflow/plugins
 
 # MLflow
 mlruns/
