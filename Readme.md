@@ -3,8 +3,8 @@
 A complete Machine Learning lifecycle. The pipeline is as follows: 
 
 `1. Read Data`➙`2. Split train-test`➙`3. Preprocess Data`➙`4. Train Model`➙<br>
-&emsp; &emsp; &emsp; &emsp; &emsp; &emsp; ➙ `5.1 Register Model`<br>
-&emsp; &emsp; &emsp; &emsp; &emsp; &emsp; ➙ `5.2 Update Registered Model`<br>
+&emsp; &emsp; &emsp; ➙ `5.1 Register Model`<br>
+&emsp; &emsp; &emsp; ➙ `5.2 Update Registered Model`<br>
 
 Telco Customer Churn dataset from <a href="https://www.kaggle.com/datasets/blastchar/telco-customer-churn" target="_blank">Kaggle</a>.
 
