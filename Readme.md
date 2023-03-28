@@ -30,8 +30,7 @@ Make sure `docker-compose` is installed:
 pip install docker-compose
 ```
 
-
-3. Clone the repository to your machine.
+2. Clone the repository to your machine.
 ```commandline
 git clone https://github.com/Deffro/MLOps.git
 ```
